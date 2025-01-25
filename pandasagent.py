@@ -4,28 +4,24 @@ from autogen_agentchat.teams import RoundRobinGroupChat
 from autogen_agentchat.ui import Console
 from autogen_core.tools import FunctionTool
 from autogen_ext.models.openai import OpenAIChatCompletionClient
-import sqlite3
+import duckdb
+import pandas as pd
 from dotenv import load_dotenv
 import os
 import asyncio
 load_dotenv()
 openai_key = os.getenv("OPEN_API_KEY")
 termination = TextMentionTermination("TERMINATE")
-def query_db(query:str, db_name:str="./data/catalog.db"):
+def query_db(query:str, df_path:str="./data/mobile_stock.csv"):
     """
     Executes a given SQL query on the specified SQLite database and returns the rows.
     """
-    conn = sqlite3.connect(db_name)
-    cursor = conn.cursor()
-    try:
-        cursor.execute(query)
-        rows = cursor.fetchall()
-    except sqlite3.Error as e:
-        print(f"An error occurred: {e}")
-        rows = []
-    finally:
-        conn.close()
-    return rows
+    # Query with DuckDB
+    # query = "SELECT * FROM df WHERE Available_Quantity > 20"
+    df = pd.read_csv(df_path)
+    # Execute the query directly on the pandas DataFrame
+    result = duckdb.query(query).df()
+    return result
 
 query_db_tool = FunctionTool(query_db, description="An agent that can query a database and return result.")
 
@@ -46,7 +42,7 @@ Do not use any columns or tables that are not provided below.
 Please ensure the generated SQL query is syntactically correct and meets the requirements of the given question.
 Below is the Schema of the available tables to generate the SQL queries:
 
-CREATE TABLE `mobile_stock` (
+CREATE TABLE `df` (
   `Product_id` int NOT NULL,
   `Product_Name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `Available_Quantity` int DEFAULT NULL,
@@ -77,7 +73,7 @@ async def main():
     team = RoundRobinGroupChat([generate_query_agent, run_query_agent], termination_condition=termination)
 
     # Run the group chat with a question
-    stream = team.run_stream(task="how many rows do we have in the database?")
+    stream = team.run_stream(task="what are the different brands(not models) of phones and how many of them do we have in stock?")
     
     # Output the result using Console
     await Console(stream)
